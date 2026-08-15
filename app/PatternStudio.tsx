@@ -10,9 +10,9 @@ type PatternId =
   | "stripe"
   | "diamond"
   | "star"
-  | "wave"
+  | "diamondgrid"
   | "geo"
-  | "grid";
+  | "wave";
 
 type PatternPreset = {
   id: PatternId;
@@ -34,9 +34,9 @@ const patterns: PatternPreset[] = [
   { id: "stripe", name: "소프트 스트라이프", tag: "STRIPE", bg: "#C8B7EE", bg2: "#E6DDF8", color1: "#FFF1B7", color2: "#17336B", tile: 84, shape: 24 },
   { id: "diamond", name: "캔디 다이아", tag: "DIAMOND", bg: "#FF9188", bg2: "#FFBBB3", color1: "#FFF1B7", color2: "#5EDAD4", tile: 102, shape: 46 },
   { id: "star", name: "스타 리듬", tag: "STARS", bg: "#716DE3", bg2: "#AAA6F4", color1: "#FFF09F", color2: "#FF9188", tile: 110, shape: 38 },
-  { id: "wave", name: "웨이브 라인", tag: "WAVE", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#17336B", color2: "#FF8F85", tile: 120, shape: 18 },
-  { id: "geo", name: "지오 믹스", tag: "GEO MIX", bg: "#F7F5ED", bg2: "#FFFFFF", color1: "#9A9A9A", color2: "#17336B", tile: 126, shape: 38 },
-  { id: "grid", name: "모듈 그리드", tag: "MODULE", bg: "#17336B", bg2: "#284B88", color1: "#69DDD6", color2: "#FF9188", tile: 104, shape: 30 },
+  { id: "diamondgrid", name: "올 다이아", tag: "ALL DIAMONDS", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#FF8F85", color2: "#61DED7", tile: 112, shape: 42 },
+  { id: "geo", name: "지오 그리드", tag: "SHAPE GRID", bg: "#F7F5ED", bg2: "#FFFFFF", color1: "#9A9A9A", color2: "#17336B", tile: 126, shape: 38 },
+  { id: "wave", name: "웨이브 사인", tag: "SINE WAVE", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#17336B", color2: "#FF8F85", tile: 120, shape: 24 },
 ];
 
 const palettes = [
@@ -56,38 +56,54 @@ function starPoints(cx: number, cy: number, outer: number, inner: number) {
   }).join(" ");
 }
 
+function shuffledShapeGrid(seed: number) {
+  const order = ["triangle", "quarter", "triangle", "quarter"];
+  let state = (seed >>> 0) || 1;
+
+  for (let index = order.length - 1; index > 0; index -= 1) {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    const swapIndex = Math.floor((state / 4294967296) * (index + 1));
+    [order[index], order[swapIndex]] = [order[swapIndex], order[index]];
+  }
+
+  return order;
+}
+
+function createSeededRandom(seed: number) {
+  let state = (seed >>> 0) || 1;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
 function buildPatternSvg({
   pattern,
-  bg,
-  bg2,
   color1,
   color2,
   tile,
   shape,
   rotation,
   softness,
-  backgroundGradient,
   shapeGradient,
   gradientAngle,
+  shapeGridSeed,
 }: {
   pattern: PatternId;
-  bg: string;
-  bg2: string;
   color1: string;
   color2: string;
   tile: number;
   shape: number;
   rotation: number;
   softness: number;
-  backgroundGradient: boolean;
   shapeGradient: boolean;
   gradientAngle: number;
+  shapeGridSeed: number;
 }) {
   const half = tile / 2;
   const quarter = tile / 4;
   const r = Math.min(shape / 2, tile * 0.42);
   const motifFill = shapeGradient ? "url(#motifGradient)" : color1;
-  const bgFill = backgroundGradient ? "url(#backgroundGradient)" : bg;
   const filter = softness > 0 ? ' filter="url(#soften)"' : "";
   const transform = rotation ? ` transform="rotate(${rotation} ${half} ${half})"` : "";
   let shapes = "";
@@ -112,19 +128,135 @@ function buildPatternSvg({
   } else if (pattern === "diamond") {
     shapes = `<polygon points="${half},${half - r} ${half + r},${half} ${half},${half + r} ${half - r},${half}" fill="${motifFill}"/><polygon points="0,${-r} ${r},0 0,${r} ${-r},0" fill="${color2}"/><polygon points="${tile},${tile - r} ${tile + r},${tile} ${tile},${tile + r} ${tile - r},${tile}" fill="${color2}"/>`;
   } else if (pattern === "star") {
-    shapes = `<polygon points="${starPoints(half, half, r, r * 0.42)}" fill="${motifFill}"/><polygon points="${starPoints(0, 0, r * 0.68, r * 0.28)}" fill="${color2}"/><polygon points="${starPoints(tile, tile, r * 0.68, r * 0.28)}" fill="${color2}"/>`;
+    const starSize = Math.min(r, half * 0.4);
+    shapes = `<polygon points="${starPoints(0, 0, starSize, starSize * 0.42)}" fill="${motifFill}"/><polygon points="${starPoints(tile, 0, starSize, starSize * 0.42)}" fill="${motifFill}"/><polygon points="${starPoints(half, half, starSize, starSize * 0.42)}" fill="${color2}"/><polygon points="${starPoints(0, tile, starSize, starSize * 0.42)}" fill="${motifFill}"/><polygon points="${starPoints(tile, tile, starSize, starSize * 0.42)}" fill="${motifFill}"/>`;
+  } else if (pattern === "diamondgrid") {
+    const diamondSize = Math.min(r, half * 0.4);
+    const diamond = (cx: number, cy: number) => `${cx},${cy - diamondSize} ${cx + diamondSize},${cy} ${cx},${cy + diamondSize} ${cx - diamondSize},${cy}`;
+    shapes = `<polygon points="${diamond(0, 0)}" fill="${motifFill}"/><polygon points="${diamond(tile, 0)}" fill="${motifFill}"/><polygon points="${diamond(half, half)}" fill="${color2}"/><polygon points="${diamond(0, tile)}" fill="${motifFill}"/><polygon points="${diamond(tile, tile)}" fill="${motifFill}"/>`;
   } else if (pattern === "wave") {
-    const amp = Math.min(shape, tile / 3);
-    shapes = `<path d="M -${quarter} ${quarter} Q ${quarter} ${quarter - amp} ${half + quarter} ${quarter} T ${tile + quarter * 3} ${quarter}" fill="none" stroke="${motifFill}" stroke-width="${Math.max(4, shape * 0.38)}" stroke-linecap="round"/><path d="M -${quarter} ${half + quarter} Q ${quarter} ${half + quarter + amp} ${half + quarter} ${half + quarter} T ${tile + quarter * 3} ${half + quarter}" fill="none" stroke="${color2}" stroke-width="${Math.max(3, shape * 0.24)}" stroke-linecap="round"/>`;
-  } else if (pattern === "grid") {
-    const bar = Math.max(6, shape * 0.32);
-    shapes = `<rect x="${quarter - bar / 2}" width="${bar}" height="${tile}" rx="${bar / 2}" fill="${motifFill}"/><rect y="${quarter - bar / 2}" width="${tile}" height="${bar}" rx="${bar / 2}" fill="${motifFill}"/><circle cx="${quarter}" cy="${quarter}" r="${r * 0.42}" fill="${color2}"/><rect x="${half + quarter - r * 0.55}" y="${half + quarter - r * 0.55}" width="${r * 1.1}" height="${r * 1.1}" fill="${color2}" transform="rotate(45 ${half + quarter} ${half + quarter})"/>`;
+    const amp = Math.min(shape * 0.62, tile * 0.2);
+    const seamlessSine = (baseline: number, direction: number) => `M -${tile} ${baseline} Q -${tile * 0.75} ${baseline - direction * amp} -${half} ${baseline} Q -${quarter} ${baseline + direction * amp} 0 ${baseline} Q ${quarter} ${baseline - direction * amp} ${half} ${baseline} Q ${half + quarter} ${baseline + direction * amp} ${tile} ${baseline} Q ${tile + quarter} ${baseline - direction * amp} ${tile + half} ${baseline} Q ${tile + half + quarter} ${baseline + direction * amp} ${tile * 2} ${baseline}`;
+    shapes = `<path d="${seamlessSine(quarter, 1)}" fill="none" stroke="${motifFill}" stroke-width="${Math.max(4, shape * 0.38)}" stroke-linejoin="round"/><path d="${seamlessSine(half + quarter, -1)}" fill="none" stroke="${color2}" stroke-width="${Math.max(3, shape * 0.24)}" stroke-linejoin="round"/>`;
   } else {
-    const tri = `${quarter},${quarter - r} ${quarter + r},${quarter + r} ${quarter - r},${quarter + r}`;
-    shapes = `<polygon points="${tri}" fill="${motifFill}"/><circle cx="${half + quarter}" cy="${quarter}" r="${r * 0.72}" fill="${color2}"/><rect x="${quarter - r * 0.72}" y="${half + quarter - r * 0.72}" width="${r * 1.44}" height="${r * 1.44}" fill="${color2}" transform="rotate(45 ${quarter} ${half + quarter})"/><path d="M ${half + quarter - r} ${half + quarter} A ${r} ${r} 0 0 0 ${half + quarter + r} ${half + quarter}" fill="none" stroke="${motifFill}" stroke-width="${Math.max(5, r * 0.38)}"/>`;
+    const cell = half;
+    const gridStroke = Math.max(2, tile * 0.035);
+    const inset = gridStroke * 0.72;
+    const circleRadius = cell / 2 - inset;
+    const diamondRadius = cell * 0.44;
+    const diamond = (cx: number, cy: number) => `${cx},${cy - diamondRadius} ${cx + diamondRadius},${cy} ${cx},${cy + diamondRadius} ${cx - diamondRadius},${cy}`;
+    const cells = [
+      { x: 0, y: 0 },
+      { x: half, y: 0 },
+      { x: 0, y: half },
+      { x: half, y: half },
+    ];
+    const gridShapes = shuffledShapeGrid(shapeGridSeed).map((kind, index) => {
+      const { x, y } = cells[index];
+      const fill = index % 2 === 0 ? motifFill : color2;
+
+      if (kind === "triangle") return `<polygon points="${x},${y} ${x + cell},${y} ${x},${y + cell}" fill="${fill}"/>`;
+      if (kind === "circle") return `<circle cx="${x + quarter}" cy="${y + quarter}" r="${circleRadius}" fill="${fill}"/>`;
+      if (kind === "diamond") return `<polygon points="${diamond(x + quarter, y + quarter)}" fill="${fill}"/>`;
+      return `<path d="M ${x} ${y} L ${x + cell} ${y} A ${cell} ${cell} 0 0 1 ${x} ${y + cell} Z" fill="${fill}"/>`;
+    }).join("");
+    shapes = `${gridShapes}<rect x="${gridStroke / 2}" y="${gridStroke / 2}" width="${tile - gridStroke}" height="${tile - gridStroke}" fill="none" stroke="${color1}" stroke-width="${gridStroke}" opacity=".55"/><path d="M ${half} 0 V ${tile} M 0 ${half} H ${tile}" stroke="${color1}" stroke-width="${gridStroke}" opacity=".55"/>`;
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}" viewBox="0 0 ${tile} ${tile}"><defs><linearGradient id="backgroundGradient" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${gradientAngle} .5 .5)"><stop stop-color="${bg}"/><stop offset="1" stop-color="${bg2}"/></linearGradient><linearGradient id="motifGradient" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${gradientAngle} .5 .5)"><stop stop-color="${color1}"/><stop offset="1" stop-color="${color2}"/></linearGradient><filter id="soften" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${softness}"/></filter></defs><rect width="${tile}" height="${tile}" fill="${bgFill}"/><g${transform}${filter}>${shapes}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}" viewBox="0 0 ${tile} ${tile}"><defs><linearGradient id="motifGradient" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${gradientAngle} .5 .5)"><stop stop-color="${color1}"/><stop offset="1" stop-color="${color2}"/></linearGradient><filter id="soften" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${softness}"/></filter></defs><g${transform}${filter}>${shapes}</g></svg>`;
+}
+
+function buildFrameSvg({ tileSvg, tile, bg, bg2, backgroundGradient, gradientAngle }: { tileSvg: string; tile: number; bg: string; bg2: string; backgroundGradient: boolean; gradientAngle: number }) {
+  const width = 1920;
+  const height = 1080;
+  const radians = (gradientAngle * Math.PI) / 180;
+  const x1 = 50 - Math.cos(radians) * 50;
+  const y1 = 50 - Math.sin(radians) * 50;
+  const x2 = 50 + Math.cos(radians) * 50;
+  const y2 = 50 + Math.sin(radians) * 50;
+  const tileData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(tileSvg)}`;
+  const backgroundFill = backgroundGradient ? "url(#frameBackground)" : bg;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><linearGradient id="frameBackground" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%"><stop stop-color="${bg}"/><stop offset="1" stop-color="${bg2}"/></linearGradient><pattern id="motifPattern" width="${tile}" height="${tile}" patternUnits="userSpaceOnUse"><image href="${tileData}" width="${tile}" height="${tile}"/></pattern></defs><rect width="1920" height="1080" fill="${backgroundFill}"/><rect width="1920" height="1080" fill="url(#motifPattern)"/></svg>`;
+}
+
+function buildShapeGridFrameSvg({
+  bg,
+  bg2,
+  color1,
+  color2,
+  tile,
+  shape,
+  shapeGradient,
+  backgroundGradient,
+  gradientAngle,
+  rotation,
+  seed,
+}: {
+  bg: string;
+  bg2: string;
+  color1: string;
+  color2: string;
+  tile: number;
+  shape: number;
+  shapeGradient: boolean;
+  backgroundGradient: boolean;
+  gradientAngle: number;
+  rotation: number;
+  seed: number;
+}) {
+  const width = 1920;
+  const height = 1080;
+  const cell = Math.max(28, tile / 2);
+  const radius = cell / 2;
+  const random = createSeededRandom(seed);
+  const radians = (gradientAngle * Math.PI) / 180;
+  const x1 = 50 - Math.cos(radians) * 50;
+  const y1 = 50 - Math.sin(radians) * 50;
+  const x2 = 50 + Math.cos(radians) * 50;
+  const y2 = 50 + Math.sin(radians) * 50;
+  const backgroundFill = backgroundGradient ? "url(#frameBackground)" : bg;
+  const motifFill = shapeGradient ? "url(#frameMotifGradient)" : color1;
+  const kinds = ["quarterCircle", "halfTriangle", "butterfly", "hourglass"];
+  const trianglePoints = (x: number, y: number, direction: number) => {
+    if (direction === 1) return `${x + cell},${y} ${x + cell},${y + cell} ${x},${y}`;
+    if (direction === 2) return `${x + cell},${y + cell} ${x},${y + cell} ${x + cell},${y}`;
+    if (direction === 3) return `${x},${y + cell} ${x},${y} ${x + cell},${y + cell}`;
+    return `${x},${y} ${x + cell},${y} ${x},${y + cell}`;
+  };
+  const quarterPath = (x: number, y: number, direction: number) => {
+    if (direction === 1) return `M ${x + cell} ${y} L ${x + cell} ${y + cell} A ${cell} ${cell} 0 0 1 ${x} ${y} Z`;
+    if (direction === 2) return `M ${x + cell} ${y + cell} L ${x} ${y + cell} A ${cell} ${cell} 0 0 1 ${x + cell} ${y} Z`;
+    if (direction === 3) return `M ${x} ${y + cell} L ${x} ${y} A ${cell} ${cell} 0 0 1 ${x + cell} ${y + cell} Z`;
+    return `M ${x} ${y} L ${x + cell} ${y} A ${cell} ${cell} 0 0 1 ${x} ${y + cell} Z`;
+  };
+  let cells = "";
+
+  for (let y = 0; y < height; y += cell) {
+    for (let x = 0; x < width; x += cell) {
+      const kind = kinds[Math.floor(random() * kinds.length)];
+      const fill = motifFill;
+      const direction = (Math.floor(random() * 4) + Math.round(rotation / 45)) % 4;
+      const cx = x + cell / 2;
+      const cy = y + cell / 2;
+      const pairVariant = (Math.floor(random() * 2) + Math.round(rotation / 90)) % 2;
+      let shapeMarkup = "";
+      if (kind === "quarterCircle") shapeMarkup = `<path d="${quarterPath(x, y, direction)}" fill="${fill}"/>`;
+      else if (kind === "halfTriangle") shapeMarkup = `<polygon points="${trianglePoints(x, y, direction)}" fill="${fill}"/>`;
+      else if (kind === "butterfly") {
+        shapeMarkup = pairVariant === 0
+          ? `<polygon points="${x},${y} ${x},${y + cell} ${cx},${cy}" fill="${fill}"/><polygon points="${x + cell},${y} ${x + cell},${y + cell} ${cx},${cy}" fill="${fill}"/>`
+          : `<polygon points="${x},${y} ${x + cell},${y} ${cx},${cy}" fill="${fill}"/><polygon points="${x},${y + cell} ${x + cell},${y + cell} ${cx},${cy}" fill="${fill}"/>`;
+      } else {
+        shapeMarkup = pairVariant === 0
+          ? `<path d="M ${x} ${y} H ${x + cell} A ${radius} ${radius} 0 0 1 ${x} ${y} Z" fill="${fill}"/><path d="M ${x} ${y + cell} H ${x + cell} A ${radius} ${radius} 0 0 0 ${x} ${y + cell} Z" fill="${fill}"/>`
+          : `<path d="M ${x} ${y} V ${y + cell} A ${radius} ${radius} 0 0 0 ${x} ${y} Z" fill="${fill}"/><path d="M ${x + cell} ${y} V ${y + cell} A ${radius} ${radius} 0 0 1 ${x + cell} ${y} Z" fill="${fill}"/>`;
+      }
+      cells += shapeMarkup;
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><linearGradient id="frameBackground" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%"><stop stop-color="${bg}"/><stop offset="1" stop-color="${bg2}"/></linearGradient><linearGradient id="frameMotifGradient" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${gradientAngle} .5 .5)"><stop stop-color="${color1}"/><stop offset="1" stop-color="${bg}"/></linearGradient></defs><rect width="${width}" height="${height}" fill="${backgroundFill}"/><g stroke="${motifFill}" stroke-width="2.4" stroke-linejoin="round" shape-rendering="geometricPrecision">${cells}</g></svg>`;
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -147,20 +279,34 @@ export default function PatternStudio() {
   const [shape, setShape] = useState(initial.shape);
   const [rotation, setRotation] = useState(0);
   const [softness, setSoftness] = useState(0);
-  const [backgroundGradient, setBackgroundGradient] = useState(false);
+  const [backgroundGradient, setBackgroundGradient] = useState(true);
   const [shapeGradient, setShapeGradient] = useState(false);
   const [gradientAngle, setGradientAngle] = useState(45);
   const [previewZoom, setPreviewZoom] = useState(100);
   const [tileView, setTileView] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const [shapeGridSeed, setShapeGridSeed] = useState(731);
 
   const current = patterns.find((item) => item.id === pattern) ?? patterns[0];
-  const svg = useMemo(
-    () => buildPatternSvg({ pattern, bg, bg2, color1, color2, tile, shape, rotation, softness, backgroundGradient, shapeGradient, gradientAngle }),
-    [pattern, bg, bg2, color1, color2, tile, shape, rotation, softness, backgroundGradient, shapeGradient, gradientAngle],
+  const rotationOptions = [0, 45, 90, 135];
+  const tileSvg = useMemo(
+    () => buildPatternSvg({ pattern, color1, color2, tile, shape, rotation, softness, shapeGradient, gradientAngle, shapeGridSeed }),
+    [pattern, color1, color2, tile, shape, rotation, softness, shapeGradient, gradientAngle, shapeGridSeed],
   );
-  const dataUri = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`, [svg]);
+  const dataUri = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(tileSvg)}`, [tileSvg]);
+  const frameSvg = useMemo(
+    () => pattern === "geo"
+      ? buildShapeGridFrameSvg({ bg, bg2, color1, color2, tile, shape, shapeGradient, backgroundGradient, gradientAngle, rotation, seed: shapeGridSeed })
+      : buildFrameSvg({ tileSvg, tile, bg, bg2, backgroundGradient, gradientAngle }),
+    [pattern, tileSvg, tile, bg, bg2, color1, color2, shape, shapeGradient, backgroundGradient, gradientAngle, rotation, shapeGridSeed],
+  );
+  const frameDataUri = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(frameSvg)}`, [frameSvg]);
+  const previewBackgroundImage = pattern === "geo"
+    ? `url("${frameDataUri}")`
+    : backgroundGradient
+      ? `url("${dataUri}"), linear-gradient(${gradientAngle}deg, ${bg}, ${bg2})`
+      : `url("${dataUri}")`;
 
   const showToast = (message: string) => {
     setToast(message);
@@ -177,6 +323,7 @@ export default function PatternStudio() {
     setShape(preset.shape);
     setRotation(0);
     setSoftness(preset.id === "polka" || preset.id === "duotone" ? 0.6 : 0);
+    if (preset.id === "geo") setShapeGridSeed(Math.floor(Math.random() * 2147483646) + 1);
   };
 
   const randomize = () => {
@@ -189,40 +336,75 @@ export default function PatternStudio() {
     setColor2(nextPalette[3]);
     setTile(Math.round(56 + Math.random() * 96));
     setShape(Math.round(12 + Math.random() * 46));
-    setRotation(Math.round(Math.random() * 90));
+    const nextRotations = [0, 45, 90, 135];
+    setRotation(nextRotations[Math.floor(Math.random() * nextRotations.length)]);
+    setShapeGridSeed(Math.floor(Math.random() * 2147483646) + 1);
     showToast("새 조합을 만들었어요");
   };
 
   const exportSvg = () => {
-    downloadBlob(new Blob([svg], { type: "image/svg+xml" }), `loop-lab-${pattern}-tile.svg`);
+    downloadBlob(new Blob([frameSvg], { type: "image/svg+xml" }), `loop-lab-${pattern}-1920x1080.svg`);
     setExportOpen(false);
-    showToast("SVG 타일을 저장했어요");
+    showToast("1920×1080 SVG를 저장했어요");
   };
 
-  const exportPng = (size: number) => {
+  const exportPng = (width: number, height: number) => {
     const image = new Image();
-    const objectUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    const objectUrl = URL.createObjectURL(new Blob([pattern === "geo" ? frameSvg : tileSvg], { type: "image/svg+xml" }));
     image.onload = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
+      canvas.width = width;
+      canvas.height = height;
       const context = canvas.getContext("2d");
       if (!context) return;
-      for (let y = 0; y < size; y += tile) {
-        for (let x = 0; x < size; x += tile) context.drawImage(image, x, y, tile, tile);
+
+      if (pattern === "geo") {
+        context.drawImage(image, 0, 0, width, height);
+      } else if (backgroundGradient) {
+        const radians = ((gradientAngle - 90) * Math.PI) / 180;
+        const directionX = Math.cos(radians);
+        const directionY = Math.sin(radians);
+        const span = Math.abs(width * directionX) + Math.abs(height * directionY);
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const gradient = context.createLinearGradient(
+          centerX - (directionX * span) / 2,
+          centerY - (directionY * span) / 2,
+          centerX + (directionX * span) / 2,
+          centerY + (directionY * span) / 2,
+        );
+        gradient.addColorStop(0, bg);
+        gradient.addColorStop(1, bg2);
+        context.fillStyle = gradient;
+      } else {
+        context.fillStyle = bg;
       }
+      if (pattern !== "geo") {
+        context.fillRect(0, 0, width, height);
+
+        const outputScale = width / 1920;
+        const outputTile = tile * outputScale;
+        for (let y = 0; y < height; y += outputTile) {
+          for (let x = 0; x < width; x += outputTile) context.drawImage(image, x, y, outputTile, outputTile);
+        }
+      }
+
       canvas.toBlob((blob) => {
-        if (blob) downloadBlob(blob, `loop-lab-${pattern}-${size}.png`);
+        if (blob) downloadBlob(blob, `loop-lab-${pattern}-${width}x${height}.png`);
       }, "image/png");
       URL.revokeObjectURL(objectUrl);
       setExportOpen(false);
-      showToast(`${size}px PNG를 저장했어요`);
+      showToast(`${width}×${height} PNG를 저장했어요`);
     };
     image.src = objectUrl;
   };
 
   const copyCss = async () => {
-    const css = `background-color: ${bg};\nbackground-image: url("${dataUri}");\nbackground-size: ${tile}px ${tile}px;`;
+    const css = pattern === "geo"
+      ? `background: url("${frameDataUri}") center / 100% 100% no-repeat;`
+      : backgroundGradient
+      ? `background-color: ${bg};\nbackground-image: url("${dataUri}"), linear-gradient(${gradientAngle}deg, ${bg}, ${bg2});\nbackground-size: ${tile}px ${tile}px, 100% 100%;\nbackground-repeat: repeat, no-repeat;`
+      : `background-color: ${bg};\nbackground-image: url("${dataUri}");\nbackground-size: ${tile}px ${tile}px;\nbackground-repeat: repeat;`;
     await navigator.clipboard.writeText(css);
     setExportOpen(false);
     showToast("CSS를 복사했어요");
@@ -243,10 +425,10 @@ export default function PatternStudio() {
             {exportOpen && (
               <div className="export-menu">
                 <div><b>패턴 내보내기</b><button aria-label="내보내기 닫기" onClick={() => setExportOpen(false)}>×</button></div>
-                <button onClick={() => exportPng(960)}><span>PNG</span><b>960 × 960</b></button>
-                <button onClick={() => exportPng(1920)}><span>PNG</span><b>1920 × 1920</b></button>
-                <button onClick={() => exportPng(3840)}><span>PNG</span><b>3840 × 3840</b></button>
-                <button onClick={exportSvg}><span>SVG</span><b>Seamless tile</b></button>
+                <button onClick={() => exportPng(1280, 720)}><span>PNG</span><b>1280 × 720</b></button>
+                <button className="recommended-export" onClick={() => exportPng(1920, 1080)}><span>PNG · 기준</span><b>1920 × 1080</b></button>
+                <button onClick={() => exportPng(3840, 2160)}><span>PNG · 4K</span><b>3840 × 2160</b></button>
+                <button onClick={exportSvg}><span>SVG</span><b>1920 × 1080</b></button>
                 <button onClick={copyCss}><span>CSS</span><b>배경 코드 복사</b></button>
               </div>
             )}
@@ -259,7 +441,7 @@ export default function PatternStudio() {
           <div className="panel-heading">
             <p className="eyebrow">MAKE IT LOOP · 01</p>
             <h1>반복되는<br />리듬을 만드세요.</h1>
-            <p>단순한 도형도 색과 간격이 달라지면 한 편의 뮤직비디오 같은 배경이 됩니다.</p>
+            <p>1920×1080 프레임 전체에 배경을 한 번 깔고, 그 위에 도형 패턴을 반복합니다.</p>
           </div>
 
           <section className="control-block">
@@ -272,6 +454,7 @@ export default function PatternStudio() {
                 </button>
               ))}
             </div>
+            {pattern === "geo" && <button className="shape-shuffle-button" onClick={() => { setShapeGridSeed(Math.floor(Math.random() * 2147483646) + 1); showToast("Shape Grid 배열을 바꿨어요"); }}>↻ 도형 재배치</button>}
           </section>
 
           <section className="control-block color-controls">
@@ -295,7 +478,7 @@ export default function PatternStudio() {
             <div className="control-label"><span>모양 조절</span><strong>LIVE</strong></div>
             <RangeControl label="타일 크기" value={tile} suffix=" px" min={24} max={220} onChange={setTile} />
             <RangeControl label="도형 크기" value={shape} suffix=" px" min={4} max={96} onChange={setShape} />
-            <RangeControl label="회전" value={rotation} suffix="°" min={0} max={180} onChange={setRotation} />
+            <RotationControl value={rotation} options={rotationOptions} onChange={setRotation} />
             <RangeControl label="가장자리 번짐" value={softness} suffix="" min={0} max={5} step={0.2} onChange={setSoftness} />
           </section>
 
@@ -314,16 +497,18 @@ export default function PatternStudio() {
             </div>
           </div>
 
-          <div className={tileView ? "pattern-preview tile-view" : "pattern-preview"} style={{ backgroundColor: bg, backgroundImage: `url("${dataUri}")`, backgroundSize: `${tile * (previewZoom / 100)}px ${tile * (previewZoom / 100)}px` }}>
-            <div className="preview-badge"><span className="pulse" />SEAMLESS PREVIEW</div>
-            {tileView && <div className="tile-guide" style={{ width: tile * (previewZoom / 100), height: tile * (previewZoom / 100) }}><span>1 TILE</span></div>}
-            <div className="scale-note">{tile} × {tile}px TILE</div>
+          <div className="frame-wrap">
+            <div className={tileView && pattern !== "geo" ? "pattern-preview tile-view" : "pattern-preview"} style={{ backgroundColor: bg, backgroundImage: previewBackgroundImage, backgroundSize: pattern === "geo" ? "100% 100%" : `${tile * (previewZoom / 100)}px ${tile * (previewZoom / 100)}px${backgroundGradient ? ", 100% 100%" : ""}`, backgroundRepeat: pattern === "geo" ? "no-repeat" : backgroundGradient ? "repeat, no-repeat" : "repeat" }}>
+              <div className="preview-badge"><span className="pulse" />1920 × 1080 FRAME</div>
+              {tileView && pattern !== "geo" && <div className="tile-guide" style={{ width: tile * (previewZoom / 100), height: tile * (previewZoom / 100) }}><span>1 TILE</span></div>}
+              <div className="scale-note">{pattern === "geo" ? "FULL-FRAME RANDOM GRID" : `${tile} × ${tile}px TILE`}</div>
+            </div>
           </div>
 
           <div className="preset-strip">
             <span>QUICK START</span>
             {patterns.slice(0, 8).map((item) => (
-              <button key={item.id} className={pattern === item.id ? "mini-pattern selected" : "mini-pattern"} onClick={() => applyPreset(item)} aria-label={`${item.name} 프리셋`} style={{ backgroundColor: item.bg, backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildPatternSvg({ pattern: item.id, bg: item.bg, bg2: item.bg2, color1: item.color1, color2: item.color2, tile: item.tile, shape: item.shape, rotation: 0, softness: 0, backgroundGradient: false, shapeGradient: false, gradientAngle: 45 }))}")` }} />
+              <button key={item.id} className={pattern === item.id ? "mini-pattern selected" : "mini-pattern"} onClick={() => applyPreset(item)} aria-label={`${item.name} 프리셋`} style={{ backgroundColor: item.bg, backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildPatternSvg({ pattern: item.id, color1: item.color1, color2: item.color2, tile: item.tile, shape: item.shape, rotation: 0, softness: 0, shapeGradient: false, gradientAngle: 45, shapeGridSeed: 731 }))}")` }} />
             ))}
             <span className="preset-name">{current.name}</span>
           </div>
@@ -341,5 +526,16 @@ function RangeControl({ label, value, suffix, min, max, step = 1, onChange }: { 
       <span>{label}</span><b>{value}{suffix}</b>
       <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
+  );
+}
+
+function RotationControl({ value, options, onChange }: { value: number; options: number[]; onChange: (value: number) => void }) {
+  return (
+    <div className="rotation-control" aria-label="도형 회전">
+      <span>회전</span>
+      <div>
+        {options.map((option) => <button key={option} type="button" className={value === option ? "active" : ""} onClick={() => onChange(option)}>{option}°</button>)}
+      </div>
+    </div>
   );
 }
