@@ -41,6 +41,3 @@ npm run start
 - Vinext / Vite
 - TypeScript
 
-## 라이선스
-
-개인 프로젝트 용도로 제작되었습니다.
