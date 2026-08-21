@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type PointerEvent } from "react";
+import { useMemo, useState, type CSSProperties, type PointerEvent } from "react";
 
 type PatternId =
   | "polka"
@@ -14,7 +14,9 @@ type PatternId =
   | "geo"
   | "wave"
   | "grid"
-  | "heart";
+  | "heart"
+  | "lightning"
+  | "clover";
 
 type PatternPreset = {
   id: PatternId;
@@ -27,6 +29,9 @@ type PatternPreset = {
   tile: number;
   shape: number;
 };
+
+type AnimationMode = "off" | "pulse" | "flow" | "both";
+type FlowDirection = "right" | "left" | "down" | "up" | "downRight" | "downLeft";
 
 const patterns: PatternPreset[] = [
   { id: "polka", name: "팝 도트", tag: "DOT GRID", bg: "#61DED7", bg2: "#A7EEE8", color1: "#FFF0B8", color2: "#FF9A90", tile: 96, shape: 36 },
@@ -41,6 +46,8 @@ const patterns: PatternPreset[] = [
   { id: "wave", name: "웨이브 사인", tag: "SINE WAVE", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#17336B", color2: "#FF8F85", tile: 120, shape: 24 },
   { id: "grid", name: "클린 격자", tag: "GRID ONLY", bg: "#FFF9E8", bg2: "#FFF1B7", color1: "#17336B", color2: "#FF9188", tile: 96, shape: 8 },
   { id: "heart", name: "하트 팝", tag: "HEART", bg: "#FFB7A8", bg2: "#FFE1D4", color1: "#FF5E68", color2: "#FFF1B7", tile: 108, shape: 44 },
+  { id: "lightning", name: "번개", tag: "LIGHTNING", bg: "#252A67", bg2: "#5E62B8", color1: "#FFE12F", color2: "#FF8F85", tile: 96, shape: 42 },
+  { id: "clover", name: "클로버", tag: "CLOVER", bg: "#BEEFE4", bg2: "#F8FFD9", color1: "#3EAD82", color2: "#FFF0B8", tile: 96, shape: 40 },
 ];
 
 const tileSizes = [24, 27, 30, 32, 36, 40, 45, 48, 54, 60, 64, 72, 80, 90, 96, 108, 120, 128, 135, 160, 180, 192, 216];
@@ -94,6 +101,8 @@ function buildPatternSvg({
   color2,
   tile,
   shape,
+  shape2,
+  pulse,
   rotation,
   softness,
   shapeGradient,
@@ -105,6 +114,8 @@ function buildPatternSvg({
   color2: string;
   tile: number;
   shape: number;
+  shape2: number;
+  pulse: boolean;
   rotation: number;
   softness: number;
   shapeGradient: boolean;
@@ -114,53 +125,72 @@ function buildPatternSvg({
   const half = tile / 2;
   const quarter = tile / 4;
   const r = Math.min(shape / 2, tile * 0.42);
+  const r2 = Math.min(shape2 / 2, tile * 0.42);
   const motifFill = shapeGradient ? "url(#motifGradient)" : color1;
   const filter = softness > 0 ? ' filter="url(#soften)"' : "";
   const transform = rotation ? ` transform="rotate(${rotation} ${half} ${half})"` : "";
+  const wrapObject = (markup: string, delayed = false) => pulse ? `<g class="motif-object${delayed ? " motif-delay" : ""}">${markup}</g>` : markup;
   let shapes = "";
 
   if (pattern === "polka" || pattern === "micro") {
     shapes = [
-      `<circle cx="0" cy="0" r="${r}" fill="${motifFill}"/>`,
-      `<circle cx="${tile}" cy="0" r="${r}" fill="${motifFill}"/>`,
-      `<circle cx="0" cy="${tile}" r="${r}" fill="${motifFill}"/>`,
-      `<circle cx="${tile}" cy="${tile}" r="${r}" fill="${motifFill}"/>`,
-      `<circle cx="${half}" cy="${half}" r="${r}" fill="${color2}"/>`,
+      wrapObject(`<circle cx="0" cy="0" r="${r}" fill="${motifFill}"/>`),
+      wrapObject(`<circle cx="${tile}" cy="0" r="${r}" fill="${motifFill}"/>`),
+      wrapObject(`<circle cx="0" cy="${tile}" r="${r}" fill="${motifFill}"/>`),
+      wrapObject(`<circle cx="${tile}" cy="${tile}" r="${r}" fill="${motifFill}"/>`),
+      wrapObject(`<circle cx="${half}" cy="${half}" r="${r2}" fill="${color2}"/>`, true),
     ].join("");
   } else if (pattern === "duotone") {
-    const splitCircle = (cx: number, cy: number, radius: number) =>
-      `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${color1}"/><path d="M ${cx} ${cy - radius} A ${radius} ${radius} 0 0 1 ${cx} ${cy + radius} L ${cx} ${cy - radius} Z" fill="${color2}"/>`;
-    shapes = `${splitCircle(0, 0, r)}${splitCircle(tile, 0, r)}${splitCircle(0, tile, r)}${splitCircle(tile, tile, r)}${splitCircle(half, half, r)}`;
+    const splitCircle = (cx: number, cy: number, delayed = false) => wrapObject(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color1}"/><path d="M ${cx} ${cy - r2} A ${r2} ${r2} 0 0 1 ${cx} ${cy + r2} L ${cx} ${cy - r2} Z" fill="${color2}"/>`, delayed);
+    shapes = `${splitCircle(0, 0)}${splitCircle(tile, 0)}${splitCircle(0, tile)}${splitCircle(tile, tile)}${splitCircle(half, half, true)}`;
   } else if (pattern === "checker") {
-    shapes = `<rect width="${half}" height="${half}" fill="${motifFill}"/><rect x="${half}" y="${half}" width="${half}" height="${half}" fill="${motifFill}"/><rect x="${half}" width="${half}" height="${half}" fill="${color2}" opacity=".2"/><rect y="${half}" width="${half}" height="${half}" fill="${color2}" opacity=".2"/>`;
+    shapes = `${wrapObject(`<rect width="${half}" height="${half}" fill="${motifFill}"/>`)}${wrapObject(`<rect x="${half}" y="${half}" width="${half}" height="${half}" fill="${motifFill}"/>`, true)}${wrapObject(`<rect x="${half}" width="${half}" height="${half}" fill="${color2}" opacity=".2"/>`)}${wrapObject(`<rect y="${half}" width="${half}" height="${half}" fill="${color2}" opacity=".2"/>`, true)}`;
   } else if (pattern === "stripe") {
-    const width = Math.max(4, shape * 0.58);
-    shapes = `<path d="M ${-tile} ${tile} L ${tile} ${-tile} M ${-half} ${tile * 1.5} L ${tile * 1.5} ${-half} M 0 ${tile * 2} L ${tile * 2} 0" stroke="${motifFill}" stroke-width="${width}"/><path d="M ${-tile * 0.75} ${tile * 1.75} L ${tile * 1.75} ${-tile * 0.75}" stroke="${color2}" stroke-width="${Math.max(2, width * 0.24)}"/>`;
+    const width = shape === 0 ? 0 : Math.max(1, shape * 0.58);
+    const width2 = shape2 === 0 ? 0 : Math.max(1, shape2 * 0.58 * 0.24);
+    shapes = `${wrapObject(`<path d="M ${-tile} ${tile} L ${tile} ${-tile} M ${-half} ${tile * 1.5} L ${tile * 1.5} ${-half} M 0 ${tile * 2} L ${tile * 2} 0" stroke="${motifFill}" stroke-width="${width}"/>`)}${wrapObject(`<path d="M ${-tile * 0.75} ${tile * 1.75} L ${tile * 1.75} ${-tile * 0.75}" stroke="${color2}" stroke-width="${width2}"/>`, true)}`;
   } else if (pattern === "diamond") {
-    shapes = `<polygon points="${half},${half - r} ${half + r},${half} ${half},${half + r} ${half - r},${half}" fill="${motifFill}"/><polygon points="0,${-r} ${r},0 0,${r} ${-r},0" fill="${color2}"/><polygon points="${tile},${tile - r} ${tile + r},${tile} ${tile},${tile + r} ${tile - r},${tile}" fill="${color2}"/>`;
+    shapes = `${wrapObject(`<polygon points="${half},${half - r} ${half + r},${half} ${half},${half + r} ${half - r},${half}" fill="${motifFill}"/>`, true)}${wrapObject(`<polygon points="0,${-r2} ${r2},0 0,${r2} ${-r2},0" fill="${color2}"/>`)}${wrapObject(`<polygon points="${tile},${tile - r2} ${tile + r2},${tile} ${tile},${tile + r2} ${tile - r2},${tile}" fill="${color2}"/>`)}`;
   } else if (pattern === "star") {
     const starSize = Math.min(r, half * 0.4);
-    shapes = `<polygon points="${starPoints(0, 0, starSize, starSize * 0.42)}" fill="${motifFill}"/><polygon points="${starPoints(tile, 0, starSize, starSize * 0.42)}" fill="${motifFill}"/><polygon points="${starPoints(half, half, starSize, starSize * 0.42)}" fill="${color2}"/><polygon points="${starPoints(0, tile, starSize, starSize * 0.42)}" fill="${motifFill}"/><polygon points="${starPoints(tile, tile, starSize, starSize * 0.42)}" fill="${motifFill}"/>`;
+    const starSize2 = Math.min(r2, half * 0.4);
+    shapes = `${wrapObject(`<polygon points="${starPoints(0, 0, starSize, starSize * 0.42)}" fill="${motifFill}"/>`)}${wrapObject(`<polygon points="${starPoints(tile, 0, starSize, starSize * 0.42)}" fill="${motifFill}"/>`)}${wrapObject(`<polygon points="${starPoints(half, half, starSize2, starSize2 * 0.42)}" fill="${color2}"/>`, true)}${wrapObject(`<polygon points="${starPoints(0, tile, starSize, starSize * 0.42)}" fill="${motifFill}"/>`)}${wrapObject(`<polygon points="${starPoints(tile, tile, starSize, starSize * 0.42)}" fill="${motifFill}"/>`)}`;
   } else if (pattern === "diamondgrid") {
     const diamondSize = Math.min(r, half * 0.4);
     const diamond = (cx: number, cy: number) => `${cx},${cy - diamondSize} ${cx + diamondSize},${cy} ${cx},${cy + diamondSize} ${cx - diamondSize},${cy}`;
-    shapes = `<polygon points="${diamond(0, 0)}" fill="${motifFill}"/><polygon points="${diamond(tile, 0)}" fill="${motifFill}"/><polygon points="${diamond(half, half)}" fill="${color2}"/><polygon points="${diamond(0, tile)}" fill="${motifFill}"/><polygon points="${diamond(tile, tile)}" fill="${motifFill}"/>`;
+    const diamond2 = (cx: number, cy: number) => `${cx},${cy - Math.min(r2, half * 0.4)} ${cx + Math.min(r2, half * 0.4)},${cy} ${cx},${cy + Math.min(r2, half * 0.4)} ${cx - Math.min(r2, half * 0.4)},${cy}`;
+    shapes = `${wrapObject(`<polygon points="${diamond(0, 0)}" fill="${motifFill}"/>`)}${wrapObject(`<polygon points="${diamond(tile, 0)}" fill="${motifFill}"/>`)}${wrapObject(`<polygon points="${diamond2(half, half)}" fill="${color2}"/>`, true)}${wrapObject(`<polygon points="${diamond(0, tile)}" fill="${motifFill}"/>`)}${wrapObject(`<polygon points="${diamond(tile, tile)}" fill="${motifFill}"/>`)}`;
   } else if (pattern === "wave") {
     const amp = Math.min(shape * 0.62, tile * 0.2);
+    const amp2 = Math.min(shape2 * 0.62, tile * 0.2);
     const seamlessSine = (baseline: number, direction: number) => `M -${tile} ${baseline} Q -${tile * 0.75} ${baseline - direction * amp} -${half} ${baseline} Q -${quarter} ${baseline + direction * amp} 0 ${baseline} Q ${quarter} ${baseline - direction * amp} ${half} ${baseline} Q ${half + quarter} ${baseline + direction * amp} ${tile} ${baseline} Q ${tile + quarter} ${baseline - direction * amp} ${tile + half} ${baseline} Q ${tile + half + quarter} ${baseline + direction * amp} ${tile * 2} ${baseline}`;
-    shapes = `<path d="${seamlessSine(quarter, 1)}" fill="none" stroke="${motifFill}" stroke-width="${Math.max(4, shape * 0.38)}" stroke-linejoin="round"/><path d="${seamlessSine(half + quarter, -1)}" fill="none" stroke="${color2}" stroke-width="${Math.max(3, shape * 0.24)}" stroke-linejoin="round"/>`;
+    const seamlessSine2 = (baseline: number, direction: number) => `M -${tile} ${baseline} Q -${tile * 0.75} ${baseline - direction * amp2} -${half} ${baseline} Q -${quarter} ${baseline + direction * amp2} 0 ${baseline} Q ${quarter} ${baseline - direction * amp2} ${half} ${baseline} Q ${half + quarter} ${baseline + direction * amp2} ${tile} ${baseline} Q ${tile + quarter} ${baseline - direction * amp2} ${tile + half} ${baseline} Q ${tile + half + quarter} ${baseline + direction * amp2} ${tile * 2} ${baseline}`;
+    const waveWidth = shape === 0 ? 0 : Math.max(1, shape * 0.38);
+    const waveWidth2 = shape2 === 0 ? 0 : Math.max(1, shape2 * 0.24);
+    shapes = `${wrapObject(`<path d="${seamlessSine(quarter, 1)}" fill="none" stroke="${motifFill}" stroke-width="${waveWidth}" stroke-linejoin="round"/>`)}${wrapObject(`<path d="${seamlessSine2(half + quarter, -1)}" fill="none" stroke="${color2}" stroke-width="${waveWidth2}" stroke-linejoin="round"/>`, true)}`;
   } else if (pattern === "grid") {
-    const lineWidth = Math.max(2, Math.min(10, shape * 0.18));
-    shapes = `<path d="M 0 0 H ${tile} M 0 0 V ${tile}" fill="none" stroke="${motifFill}" stroke-width="${lineWidth}" stroke-linecap="square"/>`;
+    const lineWidth = shape === 0 ? 0 : Math.max(1, Math.min(10, shape * 0.18));
+    shapes = wrapObject(`<path d="M 0 0 H ${tile} M 0 0 V ${tile}" fill="none" stroke="${motifFill}" stroke-width="${lineWidth}" stroke-linecap="square"/>`);
   } else if (pattern === "heart") {
     const heartSize = Math.min(shape * 0.85, tile * 0.32);
+    const heartSize2 = Math.min(shape2 * 0.85, tile * 0.32);
     shapes = [
-      `<path d="${heartPath(0, 0, heartSize)}" fill="${motifFill}"/>`,
-      `<path d="${heartPath(tile, 0, heartSize)}" fill="${motifFill}"/>`,
-      `<path d="${heartPath(0, tile, heartSize)}" fill="${motifFill}"/>`,
-      `<path d="${heartPath(tile, tile, heartSize)}" fill="${motifFill}"/>`,
-      `<path d="${heartPath(half, half, heartSize)}" fill="${color2}"/>`,
+      wrapObject(`<path d="${heartPath(0, 0, heartSize)}" fill="${motifFill}"/>`),
+      wrapObject(`<path d="${heartPath(tile, 0, heartSize)}" fill="${motifFill}"/>`),
+      wrapObject(`<path d="${heartPath(0, tile, heartSize)}" fill="${motifFill}"/>`),
+      wrapObject(`<path d="${heartPath(tile, tile, heartSize)}" fill="${motifFill}"/>`),
+      wrapObject(`<path d="${heartPath(half, half, heartSize2)}" fill="${color2}"/>`, true),
     ].join("");
+  } else if (pattern === "lightning") {
+    const lightningSize = Math.min(shape * 0.9, tile * 0.34);
+    const lightning = (cx: number, cy: number, size: number, fill: string) => `<polygon points="${cx + size * 0.2},${cy - size} ${cx - size * 0.48},${cy - size * 0.12} ${cx - size * 0.08},${cy - size * 0.08} ${cx - size * 0.28},${cy + size} ${cx + size * 0.52},${cy + size * 0.12} ${cx + size * 0.08},${cy + size * 0.08}" fill="${fill}"/>`;
+    const lightningSize2 = Math.min(shape2 * 0.9, tile * 0.34);
+    shapes = `${wrapObject(lightning(0, 0, lightningSize, motifFill))}${wrapObject(lightning(tile, 0, lightningSize, motifFill))}${wrapObject(lightning(0, tile, lightningSize, motifFill))}${wrapObject(lightning(tile, tile, lightningSize, motifFill))}${wrapObject(lightning(half, half, lightningSize2, color2), true)}`;
+  } else if (pattern === "clover") {
+    const clover = (cx: number, cy: number, size: number, fill: string, delayed = false) => wrapObject(`<g fill="${fill}"><circle cx="${cx - size * 0.42}" cy="${cy - size * 0.42}" r="${size * 0.55}"/><circle cx="${cx + size * 0.42}" cy="${cy - size * 0.42}" r="${size * 0.55}"/><circle cx="${cx - size * 0.42}" cy="${cy + size * 0.42}" r="${size * 0.55}"/><circle cx="${cx + size * 0.42}" cy="${cy + size * 0.42}" r="${size * 0.55}"/><circle cx="${cx}" cy="${cy}" r="${size * 0.42}"/></g>`, delayed);
+    const cloverSize = Math.min(shape * 0.72, tile * 0.28);
+    const cloverSize2 = Math.min(shape2 * 0.72, tile * 0.28);
+    shapes = `${clover(0, 0, cloverSize, motifFill)}${clover(tile, 0, cloverSize, motifFill)}${clover(0, tile, cloverSize, motifFill)}${clover(tile, tile, cloverSize, motifFill)}${clover(half, half, cloverSize2, color2, true)}`;
   } else {
     const cell = half;
     const gridStroke = Math.max(2, tile * 0.035);
@@ -186,7 +216,8 @@ function buildPatternSvg({
     shapes = `${gridShapes}<rect x="${gridStroke / 2}" y="${gridStroke / 2}" width="${tile - gridStroke}" height="${tile - gridStroke}" fill="none" stroke="${color1}" stroke-width="${gridStroke}" opacity=".55"/><path d="M ${half} 0 V ${tile} M 0 ${half} H ${tile}" stroke="${color1}" stroke-width="${gridStroke}" opacity=".55"/>`;
   }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}" viewBox="0 0 ${tile} ${tile}"><defs><linearGradient id="motifGradient" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${gradientAngle} .5 .5)"><stop stop-color="${color1}"/><stop offset="1" stop-color="${color2}"/></linearGradient><filter id="soften" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${softness}"/></filter></defs><g${transform}${filter}>${shapes}</g></svg>`;
+  const pulseStyle = pulse ? `<style>@keyframes motifPulse{0%,100%{transform:scale(.94)}50%{transform:scale(1.06)}}.motif-object{transform-box:fill-box;transform-origin:center;animation:motifPulse .5s ease-in-out infinite}.motif-delay{animation-delay:-.25s}</style>` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${tile}" height="${tile}" viewBox="0 0 ${tile} ${tile}"><defs>${pulseStyle}<linearGradient id="motifGradient" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${gradientAngle} .5 .5)"><stop stop-color="${color1}"/><stop offset="1" stop-color="${color2}"/></linearGradient><filter id="soften" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${softness}"/></filter></defs><g${transform}${filter}>${shapes}</g></svg>`;
 }
 
 function buildFrameSvg({ tileSvg, tile, bg, bg2, backgroundGradient, gradientAngle }: { tileSvg: string; tile: number; bg: string; bg2: string; backgroundGradient: boolean; gradientAngle: number }) {
@@ -300,6 +331,7 @@ export default function PatternStudio() {
   const [color2, setColor2] = useState(initial.color2);
   const [tile, setTile] = useState(initial.tile);
   const [shape, setShape] = useState(initial.shape);
+  const [shape2, setShape2] = useState(initial.shape);
   const [rotation, setRotation] = useState(0);
   const [softness, setSoftness] = useState(0);
   const [backgroundGradient, setBackgroundGradient] = useState(true);
@@ -310,12 +342,14 @@ export default function PatternStudio() {
   const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [shapeGridSeed, setShapeGridSeed] = useState(731);
+  const [animationMode, setAnimationMode] = useState<AnimationMode>("off");
+  const [flowDirection, setFlowDirection] = useState<FlowDirection>("right");
 
   const current = patterns.find((item) => item.id === pattern) ?? patterns[0];
   const rotationOptions = [0, 45, 90, 135];
   const tileSvg = useMemo(
-    () => buildPatternSvg({ pattern, color1, color2, tile, shape, rotation, softness, shapeGradient, gradientAngle, shapeGridSeed }),
-    [pattern, color1, color2, tile, shape, rotation, softness, shapeGradient, gradientAngle, shapeGridSeed],
+    () => buildPatternSvg({ pattern, color1, color2, tile, shape, shape2, pulse: animationMode === "pulse" || animationMode === "both", rotation, softness, shapeGradient, gradientAngle, shapeGridSeed }),
+    [pattern, color1, color2, tile, shape, shape2, animationMode, rotation, softness, shapeGradient, gradientAngle, shapeGridSeed],
   );
   const dataUri = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(tileSvg)}`, [tileSvg]);
   const frameSvg = useMemo(
@@ -330,6 +364,35 @@ export default function PatternStudio() {
     : backgroundGradient
       ? `url("${dataUri}"), linear-gradient(${gradientAngle}deg, ${bg}, ${bg2})`
       : `url("${dataUri}")`;
+  const flowEnabled = pattern !== "geo" && (animationMode === "flow" || animationMode === "both");
+  const flowDistance = tile * (previewZoom / 100);
+  const flowVector: Record<FlowDirection, [number, number]> = {
+    right: [flowDistance, 0],
+    left: [-flowDistance, 0],
+    down: [0, flowDistance],
+    up: [0, -flowDistance],
+    downRight: [flowDistance, flowDistance],
+    downLeft: [-flowDistance, flowDistance],
+  };
+  const [flowXValue, flowYValue] = flowVector[flowDirection];
+  const previewAnimationStyle = {
+    "--flow-x": `${flowXValue}px`,
+    "--flow-y": `${flowYValue}px`,
+    "--flow-x-125": `${flowXValue * 0.125}px`,
+    "--flow-y-125": `${flowYValue * 0.125}px`,
+    "--flow-x-250": `${flowXValue * 0.25}px`,
+    "--flow-y-250": `${flowYValue * 0.25}px`,
+    "--flow-x-375": `${flowXValue * 0.375}px`,
+    "--flow-y-375": `${flowYValue * 0.375}px`,
+    "--flow-x-500": `${flowXValue * 0.5}px`,
+    "--flow-y-500": `${flowYValue * 0.5}px`,
+    "--flow-x-625": `${flowXValue * 0.625}px`,
+    "--flow-y-625": `${flowYValue * 0.625}px`,
+    "--flow-x-750": `${flowXValue * 0.75}px`,
+    "--flow-y-750": `${flowYValue * 0.75}px`,
+    "--flow-x-875": `${flowXValue * 0.875}px`,
+    "--flow-y-875": `${flowYValue * 0.875}px`,
+  } as CSSProperties;
 
   const showToast = (message: string) => {
     setToast(message);
@@ -344,6 +407,7 @@ export default function PatternStudio() {
     setColor2(preset.color2);
     setTile(preset.tile);
     setShape(preset.shape);
+    setShape2(preset.shape);
     setRotation(0);
     setSoftness(preset.id === "polka" || preset.id === "duotone" ? 0.6 : 0);
     if (preset.id === "geo") setShapeGridSeed(Math.floor(Math.random() * 2147483646) + 1);
@@ -359,6 +423,7 @@ export default function PatternStudio() {
     setColor2(nextPalette[3]);
     setTile(tileSizes[Math.floor(Math.random() * tileSizes.length)]);
     setShape(Math.round(12 + Math.random() * 46));
+    setShape2(Math.round(12 + Math.random() * 46));
     const nextRotations = [0, 45, 90, 135];
     setRotation(nextRotations[Math.floor(Math.random() * nextRotations.length)]);
     setShapeGridSeed(Math.floor(Math.random() * 2147483646) + 1);
@@ -461,12 +526,6 @@ export default function PatternStudio() {
 
       <section className="workspace" id="top">
         <aside className="control-panel">
-          <div className="panel-heading">
-            <p className="eyebrow">MAKE IT LOOP · 01</p>
-            <h1>반복되는<br />리듬을 만드세요.</h1>
-            <p>1920×1080 프레임 전체에 배경을 한 번 깔고, 그 위에 도형 패턴을 반복합니다.</p>
-          </div>
-
           <section className="control-block">
             <div className="control-label"><span>패턴</span><strong>{current.tag}</strong></div>
             <div className="pattern-picker" aria-label="패턴 종류">
@@ -500,9 +559,24 @@ export default function PatternStudio() {
           <section className="control-block sliders">
             <div className="control-label"><span>모양 조절</span><strong>LIVE</strong></div>
             <TileSizeControl value={tile} onChange={setTile} />
-            <RangeControl label="도형 크기" value={shape} suffix=" px" min={4} max={96} onChange={setShape} />
+            <RangeControl label="도형 1 크기" value={shape} suffix=" px" min={0} max={128} onChange={setShape} numeric />
+            <RangeControl label="도형 2 크기" value={shape2} suffix=" px" min={0} max={128} onChange={setShape2} numeric />
             <RotationControl value={rotation} options={rotationOptions} onChange={setRotation} />
             <RangeControl label="가장자리 번짐" value={softness} suffix="" min={0} max={5} step={0.2} onChange={setSoftness} />
+          </section>
+
+          <section className="control-block animation-controls">
+            <div className="control-label"><span>애니메이션</span><strong>PREVIEW</strong></div>
+            <div className="animation-mode" aria-label="애니메이션 방식">
+              {(["off", "pulse", "flow", "both"] as AnimationMode[]).map((mode) => <button key={mode} type="button" className={animationMode === mode ? "active" : ""} onClick={() => setAnimationMode(mode)}>{mode === "off" ? "OFF" : mode === "pulse" ? "두근두근" : mode === "flow" ? "흐름" : "둘 다"}</button>)}
+            </div>
+            {(animationMode === "flow" || animationMode === "both") && (
+              <div className="flow-direction" aria-label="흐름 방향">
+                <span>흐름 방향</span>
+                {(["left", "right", "up", "down", "downLeft", "downRight"] as FlowDirection[]).map((direction) => <button key={direction} type="button" className={flowDirection === direction ? "active" : ""} onClick={() => setFlowDirection(direction)}>{direction === "left" ? "←" : direction === "right" ? "→" : direction === "up" ? "↑" : direction === "down" ? "↓" : direction === "downLeft" ? "↙" : "↘"}</button>)}
+              </div>
+            )}
+            {pattern === "geo" && animationMode !== "off" && <small>지오 그리드는 전체 프레임 랜덤 배치라 이 미리보기 애니메이션에서는 정적으로 유지됩니다.</small>}
           </section>
 
           <button className="random-mobile" onClick={randomize}>↻ 랜덤 조합 만들기</button>
@@ -521,7 +595,8 @@ export default function PatternStudio() {
           </div>
 
           <div className="frame-wrap">
-            <div className={tileView && pattern !== "geo" ? "pattern-preview tile-view" : "pattern-preview"} style={{ backgroundColor: bg, backgroundImage: previewBackgroundImage, backgroundSize: pattern === "geo" ? "100% 100%" : `${tile * (previewZoom / 100)}px ${tile * (previewZoom / 100)}px${backgroundGradient ? ", 100% 100%" : ""}`, backgroundRepeat: pattern === "geo" ? "no-repeat" : backgroundGradient ? "repeat, no-repeat" : "repeat" }}>
+            <div className={tileView && pattern !== "geo" ? "pattern-preview tile-view" : "pattern-preview"} style={{ backgroundColor: bg }}>
+              <div className={`pattern-motion-layer${flowEnabled ? " pattern-flow" : ""}`} style={{ ...previewAnimationStyle, backgroundColor: bg, backgroundImage: previewBackgroundImage, backgroundSize: pattern === "geo" ? "100% 100%" : `${tile * (previewZoom / 100)}px ${tile * (previewZoom / 100)}px${backgroundGradient ? ", 100% 100%" : ""}`, backgroundRepeat: pattern === "geo" ? "no-repeat" : backgroundGradient ? "repeat, no-repeat" : "repeat" }} />
               <div className="preview-badge"><span className="pulse" />1920 × 1080 FRAME</div>
               {tileView && pattern !== "geo" && <div className="tile-guide" style={{ width: tile * (previewZoom / 100), height: tile * (previewZoom / 100) }}><span>1 TILE</span></div>}
               <div className="scale-note">{pattern === "geo" ? "FULL-FRAME RANDOM GRID" : `${tile} × ${tile}px TILE`}</div>
@@ -531,7 +606,7 @@ export default function PatternStudio() {
           <div className="preset-strip">
             <span>QUICK START</span>
             {patterns.map((item) => (
-              <button key={item.id} className={pattern === item.id ? "mini-pattern selected" : "mini-pattern"} onClick={() => applyPreset(item)} aria-label={`${item.name} 프리셋`} style={{ backgroundColor: item.bg, backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildPatternSvg({ pattern: item.id, color1: item.color1, color2: item.color2, tile: item.tile, shape: item.shape, rotation: 0, softness: 0, shapeGradient: false, gradientAngle: 45, shapeGridSeed: 731 }))}")` }} />
+              <button key={item.id} className={pattern === item.id ? "mini-pattern selected" : "mini-pattern"} onClick={() => applyPreset(item)} aria-label={`${item.name} 프리셋`} style={{ backgroundColor: item.bg, backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildPatternSvg({ pattern: item.id, color1: item.color1, color2: item.color2, tile: item.tile, shape: item.shape, shape2: item.shape, pulse: false, rotation: 0, softness: 0, shapeGradient: false, gradientAngle: 45, shapeGridSeed: 731 }))}")` }} />
             ))}
             <span className="preset-name">{current.name}</span>
           </div>
@@ -568,11 +643,28 @@ function TileSizeControl({ value, onChange }: { value: number; onChange: (value:
   );
 }
 
-function RangeControl({ label, value, suffix, min, max, step = 1, onChange }: { label: string; value: number; suffix: string; min: number; max: number; step?: number; onChange: (value: number) => void }) {
+function RangeControl({ label, value, suffix, min, max, step = 1, onChange, numeric = false }: { label: string; value: number; suffix: string; min: number; max: number; step?: number; onChange: (value: number) => void; numeric?: boolean }) {
+  const setClampedValue = (nextValue: number) => {
+    if (!Number.isFinite(nextValue)) return;
+    onChange(Math.min(max, Math.max(min, nextValue)));
+  };
+  const handlePointerDown = (event: PointerEvent<HTMLInputElement>) => {
+    if (!numeric || max <= min) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const thumbPosition = bounds.left + ((value - min) / (max - min)) * bounds.width;
+    if (Math.abs(event.clientX - thumbPosition) <= 12) return;
+    event.preventDefault();
+    event.currentTarget.focus();
+    setClampedValue(value + (event.clientX > thumbPosition ? 4 : -4));
+  };
+
   return (
-    <label className="range-control">
-      <span>{label}</span><b>{value}{suffix}</b>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+    <label className={numeric ? "range-control numeric-range-control" : "range-control"}>
+      <span>{label}</span>
+      {numeric ? (
+        <span className="range-value-input"><input aria-label={`${label} 숫자 입력`} type="number" min={min} max={max} step={step} value={value} onChange={(event) => setClampedValue(Number(event.target.value))} /><em>{suffix}</em></span>
+      ) : <b>{value}{suffix}</b>}
+      <input type="range" min={min} max={max} step={step} value={value} onPointerDown={handlePointerDown} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   );
 }
