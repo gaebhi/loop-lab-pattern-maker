@@ -12,7 +12,9 @@ type PatternId =
   | "star"
   | "diamondgrid"
   | "geo"
-  | "wave";
+  | "wave"
+  | "grid"
+  | "heart";
 
 type PatternPreset = {
   id: PatternId;
@@ -37,6 +39,8 @@ const patterns: PatternPreset[] = [
   { id: "diamondgrid", name: "올 다이아", tag: "ALL DIAMONDS", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#FF8F85", color2: "#61DED7", tile: 112, shape: 42 },
   { id: "geo", name: "지오 그리드", tag: "SHAPE GRID", bg: "#F7F5ED", bg2: "#FFFFFF", color1: "#9A9A9A", color2: "#17336B", tile: 126, shape: 38 },
   { id: "wave", name: "웨이브 사인", tag: "SINE WAVE", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#17336B", color2: "#FF8F85", tile: 120, shape: 24 },
+  { id: "grid", name: "클린 격자", tag: "GRID ONLY", bg: "#FFF9E8", bg2: "#FFF1B7", color1: "#17336B", color2: "#FF9188", tile: 96, shape: 8 },
+  { id: "heart", name: "하트 팝", tag: "HEART", bg: "#FFB7A8", bg2: "#FFE1D4", color1: "#FF5E68", color2: "#FFF1B7", tile: 112, shape: 44 },
 ];
 
 const palettes = [
@@ -54,6 +58,10 @@ function starPoints(cx: number, cy: number, outer: number, inner: number) {
     const angle = -Math.PI / 2 + (index * Math.PI) / 5;
     return `${cx + Math.cos(angle) * radius},${cy + Math.sin(angle) * radius}`;
   }).join(" ");
+}
+
+function heartPath(cx: number, cy: number, size: number) {
+  return `M ${cx} ${cy + size * 0.95} C ${cx - size * 1.2} ${cy + size * 0.15} ${cx - size * 1.05} ${cy - size * 0.9} ${cx - size * 0.45} ${cy - size * 0.9} C ${cx - size * 0.15} ${cy - size * 0.9} ${cx - size * 0.04} ${cy - size * 0.65} ${cx} ${cy - size * 0.4} C ${cx + size * 0.04} ${cy - size * 0.65} ${cx + size * 0.15} ${cy - size * 0.9} ${cx + size * 0.45} ${cy - size * 0.9} C ${cx + size * 1.05} ${cy - size * 0.9} ${cx + size * 1.2} ${cy + size * 0.15} ${cx} ${cy + size * 0.95} Z`;
 }
 
 function shuffledShapeGrid(seed: number) {
@@ -138,6 +146,12 @@ function buildPatternSvg({
     const amp = Math.min(shape * 0.62, tile * 0.2);
     const seamlessSine = (baseline: number, direction: number) => `M -${tile} ${baseline} Q -${tile * 0.75} ${baseline - direction * amp} -${half} ${baseline} Q -${quarter} ${baseline + direction * amp} 0 ${baseline} Q ${quarter} ${baseline - direction * amp} ${half} ${baseline} Q ${half + quarter} ${baseline + direction * amp} ${tile} ${baseline} Q ${tile + quarter} ${baseline - direction * amp} ${tile + half} ${baseline} Q ${tile + half + quarter} ${baseline + direction * amp} ${tile * 2} ${baseline}`;
     shapes = `<path d="${seamlessSine(quarter, 1)}" fill="none" stroke="${motifFill}" stroke-width="${Math.max(4, shape * 0.38)}" stroke-linejoin="round"/><path d="${seamlessSine(half + quarter, -1)}" fill="none" stroke="${color2}" stroke-width="${Math.max(3, shape * 0.24)}" stroke-linejoin="round"/>`;
+  } else if (pattern === "grid") {
+    const lineWidth = Math.max(2, Math.min(10, shape * 0.18));
+    shapes = `<path d="M 0 0 H ${tile} M 0 0 V ${tile}" fill="none" stroke="${motifFill}" stroke-width="${lineWidth}" stroke-linecap="square"/>`;
+  } else if (pattern === "heart") {
+    const heartSize = Math.min(shape * 0.85, tile * 0.32);
+    shapes = `<path d="${heartPath(half, half, heartSize)}" fill="${motifFill}"/>`;
   } else {
     const cell = half;
     const gridStroke = Math.max(2, tile * 0.035);
@@ -507,7 +521,7 @@ export default function PatternStudio() {
 
           <div className="preset-strip">
             <span>QUICK START</span>
-            {patterns.slice(0, 8).map((item) => (
+            {patterns.map((item) => (
               <button key={item.id} className={pattern === item.id ? "mini-pattern selected" : "mini-pattern"} onClick={() => applyPreset(item)} aria-label={`${item.name} 프리셋`} style={{ backgroundColor: item.bg, backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildPatternSvg({ pattern: item.id, color1: item.color1, color2: item.color2, tile: item.tile, shape: item.shape, rotation: 0, softness: 0, shapeGradient: false, gradientAngle: 45, shapeGridSeed: 731 }))}")` }} />
             ))}
             <span className="preset-name">{current.name}</span>
