@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type PointerEvent } from "react";
 
 type PatternId =
   | "polka"
@@ -32,16 +32,19 @@ const patterns: PatternPreset[] = [
   { id: "polka", name: "팝 도트", tag: "DOT GRID", bg: "#61DED7", bg2: "#A7EEE8", color1: "#FFF0B8", color2: "#FF9A90", tile: 96, shape: 36 },
   { id: "duotone", name: "투톤 도트", tag: "TWO TONE", bg: "#68DDD7", bg2: "#9BEDE7", color1: "#FFF0A8", color2: "#FF9E94", tile: 108, shape: 44 },
   { id: "micro", name: "마이크로 도트", tag: "MICRO DOT", bg: "#7DEAE4", bg2: "#B1F2EC", color1: "#FFF9E8", color2: "#FFFFFF", tile: 30, shape: 5 },
-  { id: "checker", name: "스윗 체크", tag: "CHECKER", bg: "#FFE12F", bg2: "#FFE96C", color1: "#FFFDF5", color2: "#FF8F81", tile: 88, shape: 44 },
-  { id: "stripe", name: "소프트 스트라이프", tag: "STRIPE", bg: "#C8B7EE", bg2: "#E6DDF8", color1: "#FFF1B7", color2: "#17336B", tile: 84, shape: 24 },
-  { id: "diamond", name: "캔디 다이아", tag: "DIAMOND", bg: "#FF9188", bg2: "#FFBBB3", color1: "#FFF1B7", color2: "#5EDAD4", tile: 102, shape: 46 },
-  { id: "star", name: "스타 리듬", tag: "STARS", bg: "#716DE3", bg2: "#AAA6F4", color1: "#FFF09F", color2: "#FF9188", tile: 110, shape: 38 },
-  { id: "diamondgrid", name: "올 다이아", tag: "ALL DIAMONDS", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#FF8F85", color2: "#61DED7", tile: 112, shape: 42 },
-  { id: "geo", name: "지오 그리드", tag: "SHAPE GRID", bg: "#F7F5ED", bg2: "#FFFFFF", color1: "#9A9A9A", color2: "#17336B", tile: 126, shape: 38 },
+  { id: "checker", name: "스윗 체크", tag: "CHECKER", bg: "#FFE12F", bg2: "#FFE96C", color1: "#FFFDF5", color2: "#FF8F81", tile: 90, shape: 44 },
+  { id: "stripe", name: "소프트 스트라이프", tag: "STRIPE", bg: "#C8B7EE", bg2: "#E6DDF8", color1: "#FFF1B7", color2: "#17336B", tile: 80, shape: 24 },
+  { id: "diamond", name: "캔디 다이아", tag: "DIAMOND", bg: "#FF9188", bg2: "#FFBBB3", color1: "#FFF1B7", color2: "#5EDAD4", tile: 96, shape: 46 },
+  { id: "star", name: "스타 리듬", tag: "STARS", bg: "#716DE3", bg2: "#AAA6F4", color1: "#FFF09F", color2: "#FF9188", tile: 108, shape: 38 },
+  { id: "diamondgrid", name: "올 다이아", tag: "ALL DIAMONDS", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#FF8F85", color2: "#61DED7", tile: 120, shape: 42 },
+  { id: "geo", name: "지오 그리드", tag: "SHAPE GRID", bg: "#F7F5ED", bg2: "#FFFFFF", color1: "#9A9A9A", color2: "#17336B", tile: 128, shape: 38 },
   { id: "wave", name: "웨이브 사인", tag: "SINE WAVE", bg: "#FFF0B8", bg2: "#FFF8DC", color1: "#17336B", color2: "#FF8F85", tile: 120, shape: 24 },
   { id: "grid", name: "클린 격자", tag: "GRID ONLY", bg: "#FFF9E8", bg2: "#FFF1B7", color1: "#17336B", color2: "#FF9188", tile: 96, shape: 8 },
-  { id: "heart", name: "하트 팝", tag: "HEART", bg: "#FFB7A8", bg2: "#FFE1D4", color1: "#FF5E68", color2: "#FFF1B7", tile: 112, shape: 44 },
+  { id: "heart", name: "하트 팝", tag: "HEART", bg: "#FFB7A8", bg2: "#FFE1D4", color1: "#FF5E68", color2: "#FFF1B7", tile: 108, shape: 44 },
 ];
+
+const tileSizes = [24, 27, 30, 32, 36, 40, 45, 48, 54, 60, 64, 72, 80, 90, 96, 108, 120, 128, 135, 160, 180, 192, 216];
+const bothAxisTileSizes = new Set([24, 30, 40, 60, 120]);
 
 const palettes = [
   ["#61DED7", "#A7EEE8", "#FFF0B8", "#FF9A90"],
@@ -151,7 +154,13 @@ function buildPatternSvg({
     shapes = `<path d="M 0 0 H ${tile} M 0 0 V ${tile}" fill="none" stroke="${motifFill}" stroke-width="${lineWidth}" stroke-linecap="square"/>`;
   } else if (pattern === "heart") {
     const heartSize = Math.min(shape * 0.85, tile * 0.32);
-    shapes = `<path d="${heartPath(half, half, heartSize)}" fill="${motifFill}"/>`;
+    shapes = [
+      `<path d="${heartPath(0, 0, heartSize)}" fill="${motifFill}"/>`,
+      `<path d="${heartPath(tile, 0, heartSize)}" fill="${motifFill}"/>`,
+      `<path d="${heartPath(0, tile, heartSize)}" fill="${motifFill}"/>`,
+      `<path d="${heartPath(tile, tile, heartSize)}" fill="${motifFill}"/>`,
+      `<path d="${heartPath(half, half, heartSize)}" fill="${color2}"/>`,
+    ].join("");
   } else {
     const cell = half;
     const gridStroke = Math.max(2, tile * 0.035);
@@ -348,7 +357,7 @@ export default function PatternStudio() {
     setBg2(nextPalette[1]);
     setColor1(nextPalette[2]);
     setColor2(nextPalette[3]);
-    setTile(Math.round(56 + Math.random() * 96));
+    setTile(tileSizes[Math.floor(Math.random() * tileSizes.length)]);
     setShape(Math.round(12 + Math.random() * 46));
     const nextRotations = [0, 45, 90, 135];
     setRotation(nextRotations[Math.floor(Math.random() * nextRotations.length)]);
@@ -490,7 +499,7 @@ export default function PatternStudio() {
 
           <section className="control-block sliders">
             <div className="control-label"><span>모양 조절</span><strong>LIVE</strong></div>
-            <RangeControl label="타일 크기" value={tile} suffix=" px" min={24} max={220} onChange={setTile} />
+            <TileSizeControl value={tile} onChange={setTile} />
             <RangeControl label="도형 크기" value={shape} suffix=" px" min={4} max={96} onChange={setShape} />
             <RotationControl value={rotation} options={rotationOptions} onChange={setRotation} />
             <RangeControl label="가장자리 번짐" value={softness} suffix="" min={0} max={5} step={0.2} onChange={setSoftness} />
@@ -531,6 +540,31 @@ export default function PatternStudio() {
 
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </main>
+  );
+}
+
+function TileSizeControl({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const index = Math.max(0, tileSizes.indexOf(value));
+  const maxIndex = tileSizes.length - 1;
+  const alignment = bothAxisTileSizes.has(value) ? "양축 정렬" : "1축 정렬";
+  const handlePointerDown = (event: PointerEvent<HTMLInputElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const thumbPosition = bounds.left + (index / maxIndex) * bounds.width;
+    const thumbHitZone = 12;
+
+    if (Math.abs(event.clientX - thumbPosition) <= thumbHitZone) return;
+
+    event.preventDefault();
+    event.currentTarget.focus();
+    const nextIndex = event.clientX > thumbPosition ? Math.min(maxIndex, index + 1) : Math.max(0, index - 1);
+    if (nextIndex !== index) onChange(tileSizes[nextIndex]);
+  };
+
+  return (
+    <label className="range-control tile-size-control">
+      <span>타일 크기</span><b>{value} px · {alignment}</b>
+      <input aria-label="타일 크기" type="range" min="0" max={maxIndex} step="1" value={index} onPointerDown={handlePointerDown} onChange={(event) => onChange(tileSizes[Number(event.target.value)] ?? tileSizes[0])} />
+    </label>
   );
 }
 
