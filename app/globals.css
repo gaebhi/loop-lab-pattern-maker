@@ -137,6 +137,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #ff6f64; outline-
 .pattern-preview::after { content:""; position:absolute; inset:0; z-index:1; background: linear-gradient(120deg,transparent 25%,rgba(255,255,255,.12),transparent 60%); pointer-events:none; }
 .pattern-preview.tile-view { display: grid; place-items: center; }
 .pattern-motion-layer { position: absolute; inset: -5%; z-index: 0; transform-origin: center; }
+.pattern-motion-layer.graded-frame { inset: 0; }
 .pattern-motion-layer.pattern-flow { animation: loop-pattern-flow 1s linear infinite; }
 @keyframes loop-pattern-flow {
   from { background-position: 0 0, 0 0; }
@@ -152,6 +153,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #ff6f64; outline-
 .preset-strip > span:first-child { flex: 0 0 auto; margin-right: 3px; font-size: 8px; font-weight: 900; letter-spacing: .12em; }
 .mini-pattern { flex: 0 0 45px; height: 36px; border: 1px solid var(--ink); border-radius: 7px; background-size: 18px 18px !important; cursor: pointer; }
 .mini-pattern.selected { outline: 3px solid var(--coral); outline-offset: 2px; }
+.mini-pattern.graded-thumbnail { background-size: 100% 100% !important; }
+.thumb-gradedots { background-color: #a3eef2; background-image: radial-gradient(circle at 5px 5px, #45c1cb 0 4px, transparent 4.5px), radial-gradient(circle at 10px 15px, #23c9ad 0 2px, transparent 2.5px), linear-gradient(#a3eef2, #f0faf7); background-size: 10px 25px, 10px 25px, 100% 100%; }
 .preset-name { flex: 0 0 auto; color: #66738d; font-size: 9px; font-weight: 800; }
 .toast { position: fixed; left: 50%; bottom: 25px; z-index: 50; transform: translateX(-50%); padding: 11px 17px; border: 2px solid var(--ink); border-radius: 999px; background: #fffaf1; box-shadow: 4px 4px 0 var(--ink); font-size: 11px; font-weight: 900; animation: toast-in .22s ease-out; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%,10px); } }

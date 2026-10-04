@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties, type PointerEvent } from "react";
+import { buildGradedDotsFrameSvg } from "./gradedDots.mjs";
 
 type PatternId =
   | "polka"
@@ -16,7 +17,8 @@ type PatternId =
   | "grid"
   | "heart"
   | "lightning"
-  | "clover";
+  | "clover"
+  | "gradedots";
 
 type PatternPreset = {
   id: PatternId;
@@ -28,6 +30,7 @@ type PatternPreset = {
   color2: string;
   tile: number;
   shape: number;
+  shape2?: number;
 };
 
 type AnimationMode = "off" | "pulse" | "flow" | "both";
@@ -48,6 +51,7 @@ const patterns: PatternPreset[] = [
   { id: "heart", name: "하트 팝", tag: "HEART", bg: "#FFB7A8", bg2: "#FFE1D4", color1: "#FF5E68", color2: "#FFF1B7", tile: 108, shape: 44 },
   { id: "lightning", name: "번개", tag: "LIGHTNING", bg: "#252A67", bg2: "#5E62B8", color1: "#FFE12F", color2: "#FF8F85", tile: 96, shape: 42 },
   { id: "clover", name: "클로버", tag: "CLOVER", bg: "#BEEFE4", bg2: "#F8FFD9", color1: "#3EAD82", color2: "#FFF0B8", tile: 96, shape: 40 },
+  { id: "gradedots", name: "그라데이션 도트", tag: "GRADIENT DOTS", bg: "#A3EEF2", bg2: "#F0FAF7", color1: "#45C1CB", color2: "#23C9AD", tile: 80, shape: 64, shape2: 2 },
 ];
 
 const tileSizes = [24, 27, 30, 32, 36, 40, 45, 48, 54, 60, 64, 72, 80, 90, 96, 108, 120, 128, 135, 160, 180, 192, 216];
@@ -346,25 +350,28 @@ export default function PatternStudio() {
   const [flowDirection, setFlowDirection] = useState<FlowDirection>("right");
 
   const current = patterns.find((item) => item.id === pattern) ?? patterns[0];
+  const fullFrame = pattern === "geo" || pattern === "gradedots";
   const rotationOptions = [0, 45, 90, 135];
   const tileSvg = useMemo(
-    () => buildPatternSvg({ pattern, color1, color2, tile, shape, shape2, pulse: animationMode === "pulse" || animationMode === "both", rotation, softness, shapeGradient, gradientAngle, shapeGridSeed }),
+    () => pattern === "gradedots" ? "" : buildPatternSvg({ pattern, color1, color2, tile, shape, shape2, pulse: animationMode === "pulse" || animationMode === "both", rotation, softness, shapeGradient, gradientAngle, shapeGridSeed }),
     [pattern, color1, color2, tile, shape, shape2, animationMode, rotation, softness, shapeGradient, gradientAngle, shapeGridSeed],
   );
   const dataUri = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(tileSvg)}`, [tileSvg]);
   const frameSvg = useMemo(
     () => pattern === "geo"
       ? buildShapeGridFrameSvg({ bg, bg2, color1, color2, tile, shape, shapeGradient, backgroundGradient, gradientAngle, rotation, seed: shapeGridSeed })
+      : pattern === "gradedots"
+      ? buildGradedDotsFrameSvg({ bg, bg2, color1, color2, tile, shape, shape2, shapeGradient, backgroundGradient, gradientAngle, rotation, softness, pulse: animationMode === "pulse" || animationMode === "both" })
       : buildFrameSvg({ tileSvg, tile, bg, bg2, backgroundGradient, gradientAngle }),
-    [pattern, tileSvg, tile, bg, bg2, color1, color2, shape, shapeGradient, backgroundGradient, gradientAngle, rotation, shapeGridSeed],
+    [pattern, tileSvg, tile, bg, bg2, color1, color2, shape, shape2, shapeGradient, backgroundGradient, gradientAngle, rotation, shapeGridSeed, softness, animationMode],
   );
   const frameDataUri = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(frameSvg)}`, [frameSvg]);
-  const previewBackgroundImage = pattern === "geo"
+  const previewBackgroundImage = fullFrame
     ? `url("${frameDataUri}")`
     : backgroundGradient
       ? `url("${dataUri}"), linear-gradient(${gradientAngle}deg, ${bg}, ${bg2})`
       : `url("${dataUri}")`;
-  const flowEnabled = pattern !== "geo" && (animationMode === "flow" || animationMode === "both");
+  const flowEnabled = !fullFrame && (animationMode === "flow" || animationMode === "both");
   const flowDistance = tile * (previewZoom / 100);
   const flowVector: Record<FlowDirection, [number, number]> = {
     right: [flowDistance, 0],
@@ -407,10 +414,16 @@ export default function PatternStudio() {
     setColor2(preset.color2);
     setTile(preset.tile);
     setShape(preset.shape);
-    setShape2(preset.shape);
+    setShape2(preset.shape2 ?? preset.shape);
     setRotation(0);
     setSoftness(preset.id === "polka" || preset.id === "duotone" ? 0.6 : 0);
     if (preset.id === "geo") setShapeGridSeed(Math.floor(Math.random() * 2147483646) + 1);
+    if (preset.id === "gradedots") {
+      setBackgroundGradient(true);
+      setShapeGradient(true);
+      setGradientAngle(180);
+      setPreviewZoom(100);
+    }
   };
 
   const randomize = () => {
@@ -438,7 +451,7 @@ export default function PatternStudio() {
 
   const exportPng = (width: number, height: number) => {
     const image = new Image();
-    const objectUrl = URL.createObjectURL(new Blob([pattern === "geo" ? frameSvg : tileSvg], { type: "image/svg+xml" }));
+    const objectUrl = URL.createObjectURL(new Blob([fullFrame ? frameSvg : tileSvg], { type: "image/svg+xml" }));
     image.onload = () => {
       const canvas = document.createElement("canvas");
       canvas.width = width;
@@ -446,7 +459,7 @@ export default function PatternStudio() {
       const context = canvas.getContext("2d");
       if (!context) return;
 
-      if (pattern === "geo") {
+      if (fullFrame) {
         context.drawImage(image, 0, 0, width, height);
       } else if (backgroundGradient) {
         const radians = ((gradientAngle - 90) * Math.PI) / 180;
@@ -467,7 +480,7 @@ export default function PatternStudio() {
       } else {
         context.fillStyle = bg;
       }
-      if (pattern !== "geo") {
+      if (!fullFrame) {
         context.fillRect(0, 0, width, height);
 
         const outputScale = width / 1920;
@@ -488,7 +501,7 @@ export default function PatternStudio() {
   };
 
   const copyCss = async () => {
-    const css = pattern === "geo"
+    const css = fullFrame
       ? `background: url("${frameDataUri}") center / 100% 100% no-repeat;`
       : backgroundGradient
       ? `background-color: ${bg};\nbackground-image: url("${dataUri}"), linear-gradient(${gradientAngle}deg, ${bg}, ${bg2});\nbackground-size: ${tile}px ${tile}px, 100% 100%;\nbackground-repeat: repeat, no-repeat;`
@@ -530,7 +543,7 @@ export default function PatternStudio() {
             <div className="control-label"><span>패턴</span><strong>{current.tag}</strong></div>
             <div className="pattern-picker" aria-label="패턴 종류">
               {patterns.map((item) => (
-                <button key={item.id} className={pattern === item.id ? "pattern-option active" : "pattern-option"} onClick={() => applyPreset(item)} aria-pressed={pattern === item.id}>
+                <button key={item.id} title={item.name} aria-label={item.name} className={pattern === item.id ? "pattern-option active" : "pattern-option"} onClick={() => applyPreset(item)} aria-pressed={pattern === item.id}>
                   <i className={`pattern-thumb thumb-${item.id}`} />
                   <span>{item.name}</span>
                 </button>
@@ -559,9 +572,9 @@ export default function PatternStudio() {
           <section className="control-block sliders">
             <div className="control-label"><span>모양 조절</span><strong>LIVE</strong></div>
             <TileSizeControl value={tile} onChange={setTile} />
-            <RangeControl label="도형 1 크기" value={shape} suffix=" px" min={0} max={128} onChange={setShape} numeric />
-            <RangeControl label="도형 2 크기" value={shape2} suffix=" px" min={0} max={128} onChange={setShape2} numeric />
-            <RotationControl value={rotation} options={rotationOptions} onChange={setRotation} />
+            <RangeControl label={pattern === "gradedots" ? "시작 원 크기" : "도형 1 크기"} value={shape} suffix=" px" min={0} max={128} onChange={setShape} numeric />
+            <RangeControl label={pattern === "gradedots" ? "끝 원 크기" : "도형 2 크기"} value={shape2} suffix=" px" min={0} max={128} onChange={setShape2} numeric />
+            <RotationControl label={pattern === "gradedots" ? "크기 변화 방향" : "회전"} value={rotation} options={rotationOptions} onChange={setRotation} />
             <RangeControl label="가장자리 번짐" value={softness} suffix="" min={0} max={5} step={0.2} onChange={setSoftness} />
           </section>
 
@@ -577,6 +590,7 @@ export default function PatternStudio() {
               </div>
             )}
             {pattern === "geo" && animationMode !== "off" && <small>지오 그리드는 전체 프레임 랜덤 배치라 이 미리보기 애니메이션에서는 정적으로 유지됩니다.</small>}
+            {pattern === "gradedots" && (animationMode === "flow" || animationMode === "both") && <small>그라데이션 도트는 전체 화면 크기 변화가 유지되도록 흐름은 적용하지 않습니다. 두근두근은 사용할 수 있어요.</small>}
           </section>
 
           <button className="random-mobile" onClick={randomize}>↻ 랜덤 조합 만들기</button>
@@ -589,24 +603,24 @@ export default function PatternStudio() {
               <button className={tileView ? "active" : ""} onClick={() => setTileView(true)}>타일 경계</button>
             </div>
             <div className="preview-actions">
-              <label className="zoom-control">미리보기 <input type="range" min="45" max="180" value={previewZoom} onChange={(event) => setPreviewZoom(Number(event.target.value))} /><b>{previewZoom}%</b></label>
+              <label className="zoom-control">미리보기 <input disabled={fullFrame} type="range" min="45" max="180" value={previewZoom} onChange={(event) => setPreviewZoom(Number(event.target.value))} /><b>{fullFrame ? 100 : previewZoom}%</b></label>
               <button className="shuffle-button" onClick={randomize}>↻ 랜덤 조합</button>
             </div>
           </div>
 
           <div className="frame-wrap">
-            <div className={tileView && pattern !== "geo" ? "pattern-preview tile-view" : "pattern-preview"} style={{ backgroundColor: bg }}>
-              <div className={`pattern-motion-layer${flowEnabled ? " pattern-flow" : ""}`} style={{ ...previewAnimationStyle, backgroundColor: bg, backgroundImage: previewBackgroundImage, backgroundSize: pattern === "geo" ? "100% 100%" : `${tile * (previewZoom / 100)}px ${tile * (previewZoom / 100)}px${backgroundGradient ? ", 100% 100%" : ""}`, backgroundRepeat: pattern === "geo" ? "no-repeat" : backgroundGradient ? "repeat, no-repeat" : "repeat" }} />
+            <div className={tileView && !fullFrame ? "pattern-preview tile-view" : "pattern-preview"} style={{ backgroundColor: bg }}>
+              <div className={`pattern-motion-layer${pattern === "gradedots" ? " graded-frame" : ""}${flowEnabled ? " pattern-flow" : ""}`} style={{ ...previewAnimationStyle, backgroundColor: bg, backgroundImage: previewBackgroundImage, backgroundSize: fullFrame ? "100% 100%" : `${tile * (previewZoom / 100)}px ${tile * (previewZoom / 100)}px${backgroundGradient ? ", 100% 100%" : ""}`, backgroundRepeat: fullFrame ? "no-repeat" : backgroundGradient ? "repeat, no-repeat" : "repeat" }} />
               <div className="preview-badge"><span className="pulse" />1920 × 1080 FRAME</div>
-              {tileView && pattern !== "geo" && <div className="tile-guide" style={{ width: tile * (previewZoom / 100), height: tile * (previewZoom / 100) }}><span>1 TILE</span></div>}
-              <div className="scale-note">{pattern === "geo" ? "FULL-FRAME RANDOM GRID" : `${tile} × ${tile}px TILE`}</div>
+              {tileView && !fullFrame && <div className="tile-guide" style={{ width: tile * (previewZoom / 100), height: tile * (previewZoom / 100) }}><span>1 TILE</span></div>}
+              <div className="scale-note">{pattern === "geo" ? "FULL-FRAME RANDOM GRID" : pattern === "gradedots" ? "FULL-FRAME GRADIENT DOTS" : `${tile} × ${tile}px TILE`}</div>
             </div>
           </div>
 
           <div className="preset-strip">
             <span>QUICK START</span>
             {patterns.map((item) => (
-              <button key={item.id} className={pattern === item.id ? "mini-pattern selected" : "mini-pattern"} onClick={() => applyPreset(item)} aria-label={`${item.name} 프리셋`} style={{ backgroundColor: item.bg, backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(buildPatternSvg({ pattern: item.id, color1: item.color1, color2: item.color2, tile: item.tile, shape: item.shape, shape2: item.shape, pulse: false, rotation: 0, softness: 0, shapeGradient: false, gradientAngle: 45, shapeGridSeed: 731 }))}")` }} />
+              <button key={item.id} className={`mini-pattern${pattern === item.id ? " selected" : ""}${item.id === "gradedots" ? " graded-thumbnail" : ""}`} onClick={() => applyPreset(item)} aria-label={`${item.name} 프리셋`} style={{ backgroundColor: item.bg, backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(item.id === "gradedots" ? buildGradedDotsFrameSvg({ ...item, shape2: item.shape2 ?? 2, tile: 240, rotation: 0, softness: 0, backgroundGradient: true, shapeGradient: true, gradientAngle: 180 }) : buildPatternSvg({ pattern: item.id, color1: item.color1, color2: item.color2, tile: item.tile, shape: item.shape, shape2: item.shape, pulse: false, rotation: 0, softness: 0, shapeGradient: false, gradientAngle: 45, shapeGridSeed: 731 }))}")` }} />
             ))}
             <span className="preset-name">{current.name}</span>
           </div>
@@ -669,10 +683,10 @@ function RangeControl({ label, value, suffix, min, max, step = 1, onChange, nume
   );
 }
 
-function RotationControl({ value, options, onChange }: { value: number; options: number[]; onChange: (value: number) => void }) {
+function RotationControl({ label = "회전", value, options, onChange }: { label?: string; value: number; options: number[]; onChange: (value: number) => void }) {
   return (
-    <div className="rotation-control" aria-label="도형 회전">
-      <span>회전</span>
+    <div className="rotation-control" aria-label={label}>
+      <span>{label}</span>
       <div>
         {options.map((option) => <button key={option} type="button" className={value === option ? "active" : ""} onClick={() => onChange(option)}>{option}°</button>)}
       </div>
